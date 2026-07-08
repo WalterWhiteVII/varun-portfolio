@@ -16,17 +16,20 @@ if (!prefersReduced) {
   fluidResize();
   window.addEventListener('resize', fluidResize);
 
+  // Anchors spread far apart so the masses flow independently
   const anchors = [
-    { x: 0.12, y: 0.15 }, { x: 0.88, y: 0.25 },
-    { x: 0.20, y: 0.85 }, { x: 0.82, y: 0.78 },
-    { x: 0.50, y: 0.40 }, { x: 0.35, y: 0.60 },
-    { x: 0.65, y: 0.10 }
+    { x: 0.12, y: 0.15 }, { x: 0.88, y: 0.22 },
+    { x: 0.50, y: 0.48 }, { x: 0.18, y: 0.82 },
+    { x: 0.80, y: 0.80 }
   ];
   const balls = anchors.map(a => ({
     x: a.x, y: a.y,
     ax: Math.random() * TAU, ay: Math.random() * TAU,
-    fx: 0.00008 + Math.random() * 0.00008,
-    fy: 0.00006 + Math.random() * 0.00008,
+    ax2: Math.random() * TAU, ay2: Math.random() * TAU,
+    fx: 0.00009 + Math.random() * 0.00007,
+    fy: 0.00007 + Math.random() * 0.00007,
+    fx2: 0.00014 + Math.random() * 0.0001,
+    fy2: 0.00012 + Math.random() * 0.0001,
     fr: 0.00005 + Math.random() * 0.00005,
     r: 0.15 + Math.random() * 0.10
   }));
@@ -58,16 +61,34 @@ if (!prefersReduced) {
     const base = Math.min(fw, fh);
     ex += (cx - ex) * 0.08;
     ey += (cy - ey) * 0.08;
-    for (const b of balls) {
-      let x = (b.x + 0.16 * Math.sin(now * b.fx + b.ax)) * fw;
-      let y = (b.y + 0.14 * Math.sin(now * b.fy + b.ay)) * fh;
-      const r = b.r * base * (1 + 0.18 * Math.sin(now * b.fr + b.ax));
+    // Two-frequency drift gives each mass a wandering, non-repeating path
+    const pts = balls.map(b => ({
+      x: (b.x + 0.12 * Math.sin(now * b.fx + b.ax) + 0.06 * Math.sin(now * b.fx2 + b.ax2)) * fw,
+      y: (b.y + 0.11 * Math.sin(now * b.fy + b.ay) + 0.05 * Math.sin(now * b.fy2 + b.ay2)) * fh,
+      r: b.r * base * (1 + 0.18 * Math.sin(now * b.fr + b.ax))
+    }));
+    // Keep masses from clumping into one stuck shape: ease overlapping pairs apart
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const a = pts[i], c = pts[j];
+        const dx = c.x - a.x, dy = c.y - a.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const min = (a.r + c.r) * 0.75;
+        if (d < min) {
+          const shift = (min - d) * 0.5;
+          a.x -= (dx / d) * shift; a.y -= (dy / d) * shift;
+          c.x += (dx / d) * shift; c.y += (dy / d) * shift;
+        }
+      }
+    }
+    for (const p of pts) {
+      let x = p.x, y = p.y;
       const dx = x - ex, dy = y - ey;
       const d = Math.hypot(dx, dy) || 1;
-      const push = Math.max(0, 1 - d / (r * 2.2));
-      x += (dx / d) * push * r * 1.1;
-      y += (dy / d) * push * r * 1.1;
-      drawBlob(x, y, r);
+      const push = Math.max(0, 1 - d / (p.r * 2.2));
+      x += (dx / d) * push * p.r * 1.1;
+      y += (dy / d) * push * p.r * 1.1;
+      drawBlob(x, y, p.r);
     }
     requestAnimationFrame(fluidFrame);
   })();
