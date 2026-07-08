@@ -1,8 +1,9 @@
 const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const finePointer = window.matchMedia('(pointer: fine)').matches;
 
-// Liquid black background — green metaballs drifting and merging through the dark.
-// Rendered at half resolution; the CSS blur+contrast filter fuses the blobs into liquid.
+// Liquid black background — blue liquid masses drifting through the dark,
+// pushed aside by the cursor. Rendered at half resolution; the CSS
+// blur+contrast filter fuses the blobs into liquid.
 const fluid = document.getElementById('fluid');
 if (!prefersReduced) {
   const fctx = fluid.getContext('2d');
@@ -15,11 +16,11 @@ if (!prefersReduced) {
   fluidResize();
   window.addEventListener('resize', fluidResize);
 
-  // A few very large masses anchored near the edges, slowly flowing —
-  // reads as liquid moving through the black, not floating bubbles
   const anchors = [
     { x: 0.12, y: 0.15 }, { x: 0.88, y: 0.25 },
-    { x: 0.20, y: 0.85 }, { x: 0.82, y: 0.78 }
+    { x: 0.20, y: 0.85 }, { x: 0.82, y: 0.78 },
+    { x: 0.50, y: 0.40 }, { x: 0.35, y: 0.60 },
+    { x: 0.65, y: 0.10 }
   ];
   const balls = anchors.map(a => ({
     x: a.x, y: a.y,
@@ -27,16 +28,23 @@ if (!prefersReduced) {
     fx: 0.00008 + Math.random() * 0.00008,
     fy: 0.00006 + Math.random() * 0.00008,
     fr: 0.00005 + Math.random() * 0.00005,
-    r: 0.30 + Math.random() * 0.14
+    r: 0.15 + Math.random() * 0.10
   }));
 
+  // Cursor pushes the liquid aside (eased so the shove feels fluid)
+  let cx = -1e5, cy = -1e5, ex = cx, ey = cy;
+  if (finePointer) window.addEventListener('mousemove', e => {
+    cx = e.clientX * (fw / innerWidth);
+    cy = e.clientY * (fh / innerHeight);
+  });
+
   function drawBlob(x, y, r) {
-    // Low-red green: the CSS contrast() filter clips channels past its midpoint,
-    // so red above ~127 would turn blob cores yellow instead of green
+    // Low-red blue: the CSS contrast() filter clips channels past its midpoint,
+    // so channel values must sit clear of ~127 or hues drift under contrast
     const g = fctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, 'rgba(84,225,40,.9)');
-    g.addColorStop(0.65, 'rgba(84,225,40,.4)');
-    g.addColorStop(1, 'rgba(84,225,40,0)');
+    g.addColorStop(0, 'rgba(15,150,235,.9)');
+    g.addColorStop(0.65, 'rgba(15,150,235,.4)');
+    g.addColorStop(1, 'rgba(15,150,235,0)');
     fctx.fillStyle = g;
     fctx.beginPath();
     fctx.arc(x, y, r, 0, TAU);
@@ -48,10 +56,17 @@ if (!prefersReduced) {
     fctx.fillStyle = '#000';
     fctx.fillRect(0, 0, fw, fh);
     const base = Math.min(fw, fh);
+    ex += (cx - ex) * 0.08;
+    ey += (cy - ey) * 0.08;
     for (const b of balls) {
-      const x = (b.x + 0.16 * Math.sin(now * b.fx + b.ax)) * fw;
-      const y = (b.y + 0.14 * Math.sin(now * b.fy + b.ay)) * fh;
+      let x = (b.x + 0.16 * Math.sin(now * b.fx + b.ax)) * fw;
+      let y = (b.y + 0.14 * Math.sin(now * b.fy + b.ay)) * fh;
       const r = b.r * base * (1 + 0.18 * Math.sin(now * b.fr + b.ax));
+      const dx = x - ex, dy = y - ey;
+      const d = Math.hypot(dx, dy) || 1;
+      const push = Math.max(0, 1 - d / (r * 2.2));
+      x += (dx / d) * push * r * 1.1;
+      y += (dy / d) * push * r * 1.1;
       drawBlob(x, y, r);
     }
     requestAnimationFrame(fluidFrame);
